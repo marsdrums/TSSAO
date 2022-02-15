@@ -1,0 +1,56 @@
+<jittershader name="default">
+	<description>Default Slab </description>
+	<param name="colBuf" 			type="int" 		default="0" />
+	<param name="norDepthBuf" 		type="int" 		default="1" />
+	<param name="frame" 			type="float" 	default="0." />
+	<param name="MVP" 				type="mat4" 	state="MODELVIEW_PROJECTION_MATRIX" />
+	<param name="textureMatrix0" 	type="mat4" 	state="TEXTURE0_MATRIX" />
+	<param name="pos" 				type="vec3" 	state="POSITION" />
+	<param name="texcoord" 			type="vec2" 	state="TEXCOORD" />
+	<language name="glsl" version="1.5">
+		<bind param="colBuf" 			program="fp" />
+		<bind param="norDepthBuf" 		program="fp" />
+		<bind param="frame=" 			program="fp" />
+		<bind param="MVP" 				program="vp" />
+		<bind param="textureMatrix0" 	program="vp" />
+		<bind param="pos" 				program="vp" />
+		<bind param="texcoord" 			program="vp" />
+<program name="vp" type="vertex"  >
+<![CDATA[
+	#version 330 core
+	
+	in vec3 pos;
+	in vec2 texcoord;
+	out jit_PerVertex {
+		vec2 texcoord;
+	} jit_out;
+	uniform mat4 MVP;
+	uniform mat4 textureMatrix0;
+	
+	void main(void) {
+		gl_Position = MVP*vec4(pos, 1.);
+		jit_out.texcoord = vec2(textureMatrix0*vec4(texcoord, 0., 1.));
+	}
+]]>
+</program>
+
+<program name="fp" type="fragment"  >
+<![CDATA[
+#version 330 core
+
+in jit_PerVertex {
+	vec2 texcoord;
+} jit_in;
+layout (location = 0) out vec4 col;
+
+uniform sampler2DRect colBuf, norDepthBuf;
+uniform float frame;
+
+void main(void) {
+	col.rgb = vec3(texture(norDepthBuf, jit_in.texcoord).w);
+	col.a = 1.;
+}
+]]>
+</program>
+	</language>
+</jittershader>
