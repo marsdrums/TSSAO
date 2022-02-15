@@ -4,50 +4,124 @@
 	<param name="norDepthBuf" 		type="int" 		default="1" />
 	<param name="frame" 			type="float" 	default="0." />
 	<param name="MVP" 				type="mat4" 	state="MODELVIEW_PROJECTION_MATRIX" />
+	<param name="P" 				type="mat4" 	state="CAM_PROJECTION_MATRIX" />
 	<param name="textureMatrix0" 	type="mat4" 	state="TEXTURE0_MATRIX" />
 	<param name="pos" 				type="vec3" 	state="POSITION" />
-	<param name="texcoord" 			type="vec2" 	state="TEXCOORD" />
+	<param name="farClip" 			type="float" 	state="FAR_CLIP" />
+	<param name="farCorner" 		type="vec3" 	state="FAR_CORNER" />	
 	<language name="glsl" version="1.5">
 		<bind param="colBuf" 			program="fp" />
 		<bind param="norDepthBuf" 		program="fp" />
-		<bind param="frame=" 			program="fp" />
+		<bind param="frame" 			program="fp" />
 		<bind param="MVP" 				program="vp" />
+		<bind param="P"   				program="fp" />
 		<bind param="textureMatrix0" 	program="vp" />
+		<bind param="textureMatrix0" 	program="fp" />
 		<bind param="pos" 				program="vp" />
-		<bind param="texcoord" 			program="vp" />
+		<bind param="farCorner"  		program="vp" />
+		<bind param="farClip"   		program="fp" />
 <program name="vp" type="vertex"  >
 <![CDATA[
-	#version 330 core
-	
-	in vec3 pos;
-	in vec2 texcoord;
-	out jit_PerVertex {
-		vec2 texcoord;
-	} jit_out;
-	uniform mat4 MVP;
-	uniform mat4 textureMatrix0;
-	
-	void main(void) {
-		gl_Position = MVP*vec4(pos, 1.);
-		jit_out.texcoord = vec2(textureMatrix0*vec4(texcoord, 0., 1.));
-	}
+#version 330 core
+
+in vec3 pos;
+
+uniform mat4 MVP;
+uniform mat4 textureMatrix0;
+uniform vec3 farCorner;
+
+
+out jit_PerVertex {
+	smooth vec2 uv;
+	smooth vec3 rd;
+} jit_out;
+
+void main(void) {
+	gl_Position = MVP*vec4(pos, 1.);
+	vec2 uv = 0.5 * (gl_Position.xy + 1.);
+	jit_out.uv = vec2(textureMatrix0*vec4(uv, 1., 1.));
+	jit_out.rd = farCorner * vec3(gl_Position.xy, 1);
+}
 ]]>
 </program>
 
 <program name="fp" type="fragment"  >
 <![CDATA[
 #version 330 core
+#define TWOPI 6.28318531
+#define PI 3.14159265
+
+
+uniform mat4 			P, textureMatrix0;
+uniform sampler2DRect 	colBuf, norDepthBuf;
+uniform float 			farClip;
+uniform float 			frame;
 
 in jit_PerVertex {
-	vec2 texcoord;
+	smooth vec2 uv;
+	smooth vec3 rd;
 } jit_in;
+
 layout (location = 0) out vec4 col;
 
-uniform sampler2DRect colBuf, norDepthBuf;
-uniform float frame;
 
 void main(void) {
-	col.rgb = vec3(texture(norDepthBuf, jit_in.texcoord).w);
+
+			col.rgb 	= texture(colBuf, jit_in.uv).rgb;
+	vec4 	norDepth 	= texture(norDepthBuf, jit_in.uv);
+	float 	depth 		= norDepth.w;
+	vec3 	vNor 		= norDepth.xyz;
+	
+	// random normal lookup from a texture and expand to [-1..1]
+	//vec3 randN = texture(tex_rand, uv * 24).xyz * 2.0 - 1.0;
+
+	// Calculate depth of fragment;
+	vec3 	rd 		= normalize(jit_in.rd);
+	vec3 	vPos 	= rd * farClip * depth;
+
+	vec2 halton[16] = vec2[] 	(	vec2(0.500000, 0.333333),
+									vec2(0.250000, 0.666667),
+									vec2(0.750000, 0.111111),
+									vec2(0.125000, 0.444444),
+									vec2(0.625000, 0.777778),
+									vec2(0.375000, 0.222222),
+									vec2(0.875000, 0.555556),
+									vec2(0.062500, 0.888889),
+									vec2(0.562500, 0.037037),
+									vec2(0.312500, 0.370370),
+									vec2(0.812500, 0.703704),
+									vec2(0.187500, 0.148148),
+									vec2(0.687500, 0.481481),
+									vec2(0.437500, 0.814815),
+									vec2(0.937500, 0.259259),
+									vec2(0.031250, 0.592593)
+								);
+	float	occ = 16.;
+
+	for(int i = 0; i < 16; i++){
+
+		float 	phi 	= 	(halton[i].x - 0.5) * TWOPI;
+		float 	theta 	= 	(halton[i].y - 0.5) * PI;
+		float 	radius 	= 	0.01;
+		vec3 	randOff = 	vec3(	sin(theta)*cos(phi),
+									sin(theta)*sin(phi),
+									cos(theta)
+								);
+				randOff += vNor;
+				randOff *= 	radius;
+
+		// move new view-space position back into texture space
+		//#define RADIUS 0.2125
+		vec4 	nuv 		= 	P * vec4(vPos + randOff, 1);
+				nuv.xy 		/= 	nuv.w;
+		vec2 	nuv_rect 	= 	vec2(textureMatrix0 * vec4((nuv.xy*0.5 + 0.5), 1., 1.));
+		
+		// compute occlusion based on the (scaled) Z difference
+		float 	zd 	= 	clamp(farClip * (depth - texture(norDepthBuf, nuv_rect).w), 0.0, 1.0);
+				occ -= 	texture(norDepthBuf, nuv_rect).w > depth ? 0. : 1.;
+	}
+	occ /= 16.;
+	col.rgb *= occ;
 	col.a = 1.;
 }
 ]]>

@@ -10,7 +10,7 @@
 		}
 ,
 		"classnamespace" : "box",
-		"rect" : [ 551.0, 448.0, 802.0, 628.0 ],
+		"rect" : [ 1264.0, 268.0, 802.0, 628.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 0,
 		"default_fontsize" : 12.0,
@@ -45,7 +45,7 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 441.0, 464.0, 124.0, 22.0 ],
+					"patching_rect" : [ 364.0, 425.0, 124.0, 22.0 ],
 					"text" : "prepend param frame"
 				}
 
@@ -57,7 +57,7 @@
 					"numinlets" : 5,
 					"numoutlets" : 4,
 					"outlettype" : [ "int", "", "", "int" ],
-					"patching_rect" : [ 440.0, 404.0, 61.0, 22.0 ],
+					"patching_rect" : [ 363.0, 365.0, 61.0, 22.0 ],
 					"text" : "counter"
 				}
 
@@ -173,13 +173,12 @@
 , 			{
 				"box" : 				{
 					"id" : "obj-6",
-					"linecount" : 2,
 					"maxclass" : "newobj",
 					"numinlets" : 1,
 					"numoutlets" : 2,
 					"outlettype" : [ "jit_matrix", "" ],
-					"patching_rect" : [ 386.0, 212.0, 369.0, 36.0 ],
-					"text" : "jit.gl.gridshape @shape plane @rotatexyz -90. 0. 0. @scale 10. 10. 10."
+					"patching_rect" : [ 386.0, 212.0, 385.0, 22.0 ],
+					"text" : "jit.gl.gridshape @shape plane @rotatexyz 90. 0. 0. @scale 10. 10. 10."
 				}
 
 			}
