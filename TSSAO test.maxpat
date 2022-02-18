@@ -178,7 +178,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "jit_matrix", "" ],
 					"patching_rect" : [ 386.0, 212.0, 385.0, 22.0 ],
-					"text" : "jit.gl.gridshape @shape plane @rotatexyz 90. 0. 0. @scale 10. 10. 10."
+					"text" : "jit.gl.gridshape @shape plane @rotatexyz -90. 0. 0. @scale 10. 10. 10."
 				}
 
 			}
