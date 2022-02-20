@@ -145,7 +145,7 @@ void main(void) {
 				samplePos *= radius;
 				samplePos += vPos;
 
-		float	newDepth = samplePos.z/offset.w;
+		float	newDepth = samplePos.z;
 
 
 				offset      = P * vec4(samplePos, 1.0);    // from view to clip-space
