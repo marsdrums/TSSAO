@@ -129,11 +129,6 @@ void main(void) {
 
   	vec3 	p 		= 	getPosition(jit_in.uv); 
   	vec3 	n 		= 	getNormal(jit_in.uv); 
-
-  	float 	ao 		= 	0.0; 
-
-
-
     vec2 	vel 		= 	texture(buffer_vel, jit_in.uv).rg;
     vec2 	histUV 		= 	jit_in.testUV - vel;
   	vec3 	aoHistory 	= 	texture(history, (textureMatrix0*vec4(histUV, 1., 1.)).xy).xyz; //occ, iterCount, prevDepth
@@ -141,17 +136,17 @@ void main(void) {
   	float   iterCount 	= 	clamp(aoHistory.y, 0., 1.);
   	float   prevDepth 	= 	aoHistory.z;
 
-
+  	int iterations = 1;
 
   	//disocclusion?
     if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1. || abs(1. - (p.z / prevDepth)) > 0.1)
-    //if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1.)
     {
     		iterCount 	= 0.;
+    		iterations  = 2;
     }
 
   	//**SSAO Calculation**//
-  	int iterations =   int(floor(mix(4, 1, sqrt(iterCount))));
+  	float 	ao 		= 	0.0; 
   	int aoSamples = 4;
 
   	for (int j = 0; j < iterations; j++){
