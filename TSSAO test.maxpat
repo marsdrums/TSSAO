@@ -10,7 +10,7 @@
 		}
 ,
 		"classnamespace" : "box",
-		"rect" : [ 510.0, 183.0, 1452.0, 1280.0 ],
+		"rect" : [ 868.0, 150.0, 1452.0, 1280.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 0,
 		"default_fontsize" : 12.0,
@@ -45,7 +45,6 @@
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 293.0, 325.000000178813934, 125.0, 20.0 ],
-					"presentation_linecount" : 3,
 					"text" : "2) play with the radius"
 				}
 
@@ -887,7 +886,7 @@
 					"numinlets" : 1,
 					"numoutlets" : 2,
 					"outlettype" : [ "jit_matrix", "" ],
-					"patching_rect" : [ 392.0, 754.0, 201.0, 22.0 ],
+					"patching_rect" : [ 392.0, 760.0, 201.0, 22.0 ],
 					"text" : "jit.gl.videoplane @transform_reset 2"
 				}
 
