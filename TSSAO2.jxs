@@ -16,6 +16,7 @@
 	<param name="pos" 				type="vec3" 	state="POSITION" />
 	<param name="farClip" 			type="float" 	state="FAR_CLIP" />
 	<param name="farCorner" 		type="vec3" 	state="FAR_CORNER" />	
+	<param name="radius"			type="float"   	default="3." />
 	<language name="glsl" version="1.5">
 		<bind param="buffer_col" 			program="fp" />
 		<bind param="buffer_norm" 		program="fp" />
@@ -33,6 +34,7 @@
 		<bind param="pos" 				program="vp" />
 		<bind param="farCorner"  		program="vp" />
 		<bind param="farClip"   		program="fp" />
+		<bind param="radius"  			program="fp" />
 <program name="vp" type="vertex"  >
 <![CDATA[
 #version 330 core
@@ -71,7 +73,7 @@ uniform mat4 			P, invP, textureMatrix0;
 uniform sampler2DRect 	buffer_col, buffer_norm, buffer_pos, buffer_vel, history;
 uniform sampler2D  		buffer_rand;
 uniform float 			farClip;
-uniform float 			frame;
+uniform float 			frame, radius;
 
 in jit_PerVertex {
 	smooth vec2 testUV;
@@ -86,7 +88,6 @@ layout (location = 1) out vec4 oldOcc;
 //sampler g_buffer_pos; 
 //sampler g_random; 
 const float random_size		= 1.; 
-const float g_sample_rad	= 3.; 
 const float g_intensity		= 2.; 
 const float g_scale			= 1.; 
 const float g_bias			= 0.001; 
@@ -137,6 +138,7 @@ void main(void) {
   	float   prevDepth 	= 	aoHistory.z;
 
   	int iterations = 1;
+  	int aoSamples = 4;
 
   	//disocclusion?
     if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1. || abs(1. - (p.z / prevDepth)) > 0.1)
@@ -147,12 +149,11 @@ void main(void) {
 
   	//**SSAO Calculation**//
   	float 	ao 		= 	0.0; 
-  	int aoSamples = 4;
 
   	for (int j = 0; j < iterations; j++){
-  		vec2 	rand 	= 	getRandom(vec2(mod(jit_in.testUV.x + float(j)*0.1, 1.), jit_in.testUV.y));  
+  		vec2 	rand 	= 	getRandom(vec2(mod(jit_in.testUV.x + float(j)*0.01, 1.), jit_in.testUV.y));  
     	float   randRad = 	hash(uvec3(jit_in.uv, frame+j*10.)).x;
-  		float 	rad 	= 	g_sample_rad*randRad/p.z; 
+  		float 	rad 	= 	radius*randRad/p.z; 
 
 	  	for (int i = 0; i < aoSamples; i++){
 	  		vec2 	coord1 = reflect(vec[i],rand)*rad; 
