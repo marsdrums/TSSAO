@@ -57,9 +57,9 @@ void main()
 	vec4 AOtexture = texture(tex0, jit_in.uv);
 	float c = AOtexture.r;
 
-	int MSIZE = AOtexture.y >= 0.2 ? 1 : 3; //apply blurring only to new disoccluded fragments
+	int MSIZE = AOtexture.y > 0.1 ? 1 : 5; //apply blurring only to new disoccluded fragments
 	int kSize = (MSIZE-1)/2;
-	float kernel[3];
+	float kernel[5];
 	float final_ao = 0.;
 	
 	//create the 1-D kernel

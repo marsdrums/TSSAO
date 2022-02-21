@@ -16,6 +16,7 @@
 	<param name="radius"			type="float"   	default="2.4" />
 	<param name="intensity"			type="float"   	default="2.4" />
 	<param name="bias"  			type="float"  	default="0.001" />
+	<param name="frame"   			type="float"  	default="0." />
 	<language name="glsl" version="1.5">
 		<bind param="buffer_col" 		program="fp" />
 		<bind param="buffer_norm" 		program="fp" />
@@ -33,6 +34,7 @@
 		<bind param="radius"  			program="fp" />
 		<bind param="intensity"  		program="fp" />
 		<bind param="bias"  			program="fp" />
+		<bind param="frame"   			program="fp" />
 <program name="vp" type="vertex"  >
 <![CDATA[
 #version 330 core
@@ -67,7 +69,7 @@ void main(void) {
 uniform mat4 			P, invP, textureMatrix0;
 uniform sampler2DRect 	buffer_col, buffer_norm, buffer_pos, buffer_vel, history;
 uniform sampler2D  		buffer_rand;
-uniform float 			radius, intensity, bias;
+uniform float 			frame, radius, intensity, bias;
 
 in jit_PerVertex {
 	smooth vec2 normUV;
