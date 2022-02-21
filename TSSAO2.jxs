@@ -14,11 +14,11 @@
 	<param name="uv"   				type="vec2"   	state="TEXCOORD" />
 	<param name="textureMatrix0" 	type="mat4" 	state="TEXTURE0_MATRIX" />
 	<param name="pos" 				type="vec3" 	state="POSITION" />
-	<param name="farClip" 			type="float" 	state="FAR_CLIP" />
-	<param name="farCorner" 		type="vec3" 	state="FAR_CORNER" />	
-	<param name="radius"			type="float"   	default="3." />
+	<param name="radius"			type="float"   	default="2.4" />
+	<param name="intensity"			type="float"   	default="2.4" />
+	<param name="bias"  			type="float"  	default="0.001" />
 	<language name="glsl" version="1.5">
-		<bind param="buffer_col" 			program="fp" />
+		<bind param="buffer_col" 		program="fp" />
 		<bind param="buffer_norm" 		program="fp" />
 		<bind param="buffer_pos"  		program="fp" />
 		<bind param="buffer_vel"   		program="fp" />
@@ -32,9 +32,9 @@
 		<bind param="textureMatrix0" 	program="vp" />
 		<bind param="textureMatrix0" 	program="fp" />
 		<bind param="pos" 				program="vp" />
-		<bind param="farCorner"  		program="vp" />
-		<bind param="farClip"   		program="fp" />
 		<bind param="radius"  			program="fp" />
+		<bind param="intensity"  		program="fp" />
+		<bind param="bias"  			program="fp" />
 <program name="vp" type="vertex"  >
 <![CDATA[
 #version 330 core
@@ -48,17 +48,14 @@ uniform vec3 farCorner;
 
 
 out jit_PerVertex {
-	smooth vec2 testUV;
+	smooth vec2 normUV;
 	smooth vec2 uv;
-	smooth vec3 rd;
 } jit_out;
 
 void main(void) {
 	gl_Position = MVP*vec4(pos, 1.);
-	//vec2 uv = 0.5 * (gl_Position.xy + vec2(1.));
 	jit_out.uv = vec2(textureMatrix0*vec4(uv, 1., 1.)).xy;
-	jit_out.rd = farCorner * vec3(gl_Position.xy, 1);
-	jit_out.testUV = uv;
+	jit_out.normUV = uv;
 }
 ]]>
 </program>
@@ -72,25 +69,17 @@ void main(void) {
 uniform mat4 			P, invP, textureMatrix0;
 uniform sampler2DRect 	buffer_col, buffer_norm, buffer_pos, buffer_vel, history;
 uniform sampler2D  		buffer_rand;
-uniform float 			farClip;
-uniform float 			frame, radius;
+uniform float 			frame, radius, intensity, bias;
 
 in jit_PerVertex {
-	smooth vec2 testUV;
+	smooth vec2 normUV;
 	smooth vec2 uv;
-	smooth vec3 rd;
 } jit_in;
 
 layout (location = 0) out vec4 col;
 layout (location = 1) out vec4 oldOcc;
 
-//sampler g_buffer_norm; 
-//sampler g_buffer_pos; 
-//sampler g_random; 
-const float random_size		= 1.; 
-const float g_intensity		= 2.; 
-const float g_scale			= 1.; 
-const float g_bias			= 0.001; 
+const float random_size		= 1.;  
 
 //struct PS_INPUT { float2 uv : TEXCOORD0; }; 
 //struct PS_OUTPUT { float4 color : COLOR0; }; 
@@ -116,10 +105,13 @@ float 	getAmbientOcclusion(in vec2 tcoord,in vec2 uv, in vec3 p, in vec3 cnorm){
 				uv 		= 	(textureMatrix0*vec4(uv, 1., 1.)).xy;
 		vec3 	diff 	= 	getPosition(tcoord + uv) - p; 
    		vec3 	v 		= 	normalize(diff); 
-   		float 	d 		= 	length(diff)*g_scale; 
-  		return 				max(0.0,dot(cnorm,v)-g_bias)*(1.0/(1.0+d))*g_intensity;
+   		float 	d 		= 	length(diff); 
+  		return 				max(0.0,dot(cnorm,v)-bias)*(intensity/(1. + d*d)); //*** i squared the distance
 }
-
+/************************************ Temporal-supersampled SSAO*********************************************************
+based on: https://publik.tuwien.ac.at/files/PubDat_191582.pdf
+and: https://www.gamedev.net/tutorials/_/technical/graphics-programming-and-theory/a-simple-and-practical-approach-to-ssao-r2753/
+******************************************************************************************************************************/
 void main(void) {
 
   	const 	vec2 	vec[4] 	= 	vec2[] (	vec2(+1,+0),
@@ -128,12 +120,12 @@ void main(void) {
   											vec2(+0,-1)
   										);
 
-  	vec3 	p 		= 	getPosition(jit_in.uv); 
-  	vec3 	n 		= 	getNormal(jit_in.uv); 
+  	vec3 	p 			= 	getPosition(jit_in.uv); 
+  	vec3 	n 			= 	getNormal(jit_in.uv); 
     vec2 	vel 		= 	texture(buffer_vel, jit_in.uv).rg;
-    vec2 	histUV 		= 	jit_in.testUV - vel;
+    vec2 	histUV 		= 	jit_in.normUV - vel;
   	vec3 	aoHistory 	= 	texture(history, (textureMatrix0*vec4(histUV, 1., 1.)).xy).xyz; //occ, iterCount, prevDepth
-  	float  	aoPrev 	= 	aoHistory.x;
+  	float  	aoPrev 		= 	aoHistory.x;
   	float   iterCount 	= 	clamp(aoHistory.y, 0., 1.);
   	float   prevDepth 	= 	aoHistory.z;
 
@@ -141,7 +133,8 @@ void main(void) {
   	int aoSamples = 4;
 
   	//disocclusion?
-    if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1. || abs(1. - (p.z / prevDepth)) > 0.1)
+    if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1. || abs(1. - (p.z / prevDepth)) > 0.01)
+    //if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1.)
     {
     		iterCount 	= 0.;
     		iterations  = 2;
@@ -151,9 +144,10 @@ void main(void) {
   	float 	ao 		= 	0.0; 
 
   	for (int j = 0; j < iterations; j++){
-  		vec2 	rand 	= 	getRandom(vec2(mod(jit_in.testUV.x + float(j)*0.01, 1.), jit_in.testUV.y));  
+  		vec2 	rand 	= 	getRandom(vec2(mod(jit_in.normUV.x + float(j)*0.01, 1.), jit_in.normUV.y));  
     	float   randRad = 	hash(uvec3(jit_in.uv, frame+j*10.)).x;
-  		float 	rad 	= 	radius*randRad/p.z; 
+    			randRad =  	pow(randRad, 1.5); //seems to increase the details 
+  		float 	rad 	= 	radius*randRad/p.z; //ditsance squared to take more samples close to the fragment
 
 	  	for (int i = 0; i < aoSamples; i++){
 	  		vec2 	coord1 = reflect(vec[i],rand)*rad; 
@@ -167,8 +161,8 @@ void main(void) {
 	  	}
   	}
 	  		ao 	/=	float(aoSamples)*float(iterations)*4.; 
-
-	  		float  	blend 		=	clamp(iterCount*100., 0., 0.95);//1. / (iterCount*100. + 1.);
+	  		ao = clamp(ao, 0., 1.);
+	  		float  	blend 		=	clamp(iterCount*100., 0., 0.9);//1. / (iterCount*100. + 1.);
 	  		ao 			= 	mix(ao, aoPrev, blend);
 	  		iterCount 	+= 	0.01;
 	  		prevDepth 	= 	p.z;
@@ -180,5 +174,5 @@ void main(void) {
 
 ]]>
 </program>
-	</language>
+</language>
 </jittershader>
