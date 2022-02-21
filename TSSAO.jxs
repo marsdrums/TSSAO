@@ -4,11 +4,9 @@
 	<param name="buffer_norm" 		type="int" 		default="1" />
 	<param name="buffer_pos" 		type="int" 		default="2" />
 	<param name="buffer_vel"    	type="int"    	default="3" />
-	<param name="buffer_prev_pos"  	type="int"   	default="4" />
-	<param name="history" 			type="int" 		default="5" />
-	<param name="buffer_rand"   	type="int"  	default="6" />
-	<texture file="random-tex.png" 	type="float16" 	unit="6" rectangle="0" filter="none none" wrap="repeat repeat"/>
-	<param name="frame" 			type="float" 	default="0." />
+	<param name="history" 			type="int" 		default="4" />
+	<param name="buffer_rand"   	type="int"  	default="5" />
+	<texture file="random-tex.png" 	type="float16" 	unit="5" rectangle="0" filter="none none" wrap="repeat repeat"/>
 	<param name="MVP" 				type="mat4" 	state="MODELVIEW_PROJECTION_MATRIX" />
 	<param name="P" 				type="mat4" 	state="CAM_PROJECTION_MATRIX" />
 	<param name="invP" 				type="mat4" 	state="PROJECTION_MATRIX" transform="INVERSE" />
@@ -22,11 +20,9 @@
 		<bind param="buffer_col" 		program="fp" />
 		<bind param="buffer_norm" 		program="fp" />
 		<bind param="buffer_pos"  		program="fp" />
-		<bind param="buffer_prev_pos"  	program="fp" />
 		<bind param="buffer_vel"   		program="fp" />
 		<bind param="history"   		program="fp" />
 		<bind param="buffer_rand"  		program="fp" />
-		<bind param="frame" 			program="fp" />
 		<bind param="MVP" 				program="vp" />
 		<bind param="P"   				program="fp" />
 		<bind param="invP"   			program="fp" />
@@ -69,9 +65,9 @@ void main(void) {
 #define PI 3.14159265
 
 uniform mat4 			P, invP, textureMatrix0;
-uniform sampler2DRect 	buffer_col, buffer_norm, buffer_pos, buffer_prev_pos, buffer_vel, history;
+uniform sampler2DRect 	buffer_col, buffer_norm, buffer_pos, buffer_vel, history;
 uniform sampler2D  		buffer_rand;
-uniform float 			frame, radius, intensity, bias;
+uniform float 			radius, intensity, bias;
 
 in jit_PerVertex {
 	smooth vec2 normUV;
@@ -80,10 +76,6 @@ in jit_PerVertex {
 
 layout (location = 0) out vec4 occlusion;
 
-const float random_size		= 1.;  
-
-//struct PS_INPUT { float2 uv : TEXCOORD0; }; 
-//struct PS_OUTPUT { float4 color : COLOR0; }; 
 vec3 hash( uvec3 x )
 {
     x = ((x>>8U)^x.yzx)*1103515245U;
@@ -134,16 +126,14 @@ void main(void) {
     vec2 	histUV 		= 	jit_in.normUV - vel;
   	vec3 	aoHistory 	= 	texture(history, (textureMatrix0*vec4(histUV, 1., 1.)).xy).xyz; //occ, iterCount, prevDepth
   	float  	aoPrev 		= 	aoHistory.x;
-  	float   iterCount 	= 	clamp(aoHistory.y, 0., 1.);
+  	float   iterCount 	= 	aoHistory.y;
   	float   prevDepth 	= 	aoHistory.z;
 
   	int iterations = 1;
   	int aoSamples = 4;
 
-
   	//disocclusion?
     if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1. || abs(1. - (p.z / prevDepth)) > 0.1)
-    //if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1.)
     {
     		iterCount 	= 0.;
     		iterations  = 2;
@@ -153,8 +143,8 @@ void main(void) {
   	float 	ao 		= 	0.0; 
 
   	for (int j = 0; j < iterations; j++){
-  		vec2 	rand 	= 	getRandom(vec2(mod(jit_in.normUV.x + float(j)*0.01 + frame*0.1234556, 1.), jit_in.normUV.y));  
-    	float   randRad = 	hash(uvec3(jit_in.uv, frame+j*10.)).x;
+  		vec2 	rand 	= 	getRandom(vec2(mod(jit_in.normUV.x + float(j)*0.01, 1.), jit_in.normUV.y + iterCount));  
+    	float   randRad = 	hash(uvec3(jit_in.uv, iterCount*987.6543+j*10.)).x;
     			randRad =  	pow(randRad, 1.5); //seems to increase the details 
   		float 	rad 	= 	radius*randRad/p.z; //ditsance squared to take more samples close to the fragment
 
@@ -163,18 +153,17 @@ void main(void) {
 	  		vec2 	coord1_07 = coord1*0.707;
 	    	vec2 	coord2 = vec2(coord1_07.x - coord1_07.y, coord1_07.x + coord1_07.y); 
 	    
-	    			ao += getAmbientOcclusion(jit_in.uv,coord1*0.25, p, n); 
-	    			ao += getAmbientOcclusion(jit_in.uv,coord2*0.5, 	p, n); 
-	    			ao += getAmbientOcclusion(jit_in.uv,coord1*0.75, p, n); 
+	    			ao += getAmbientOcclusion(jit_in.uv,coord1*0.25, 	p, n); 
+	    			ao += getAmbientOcclusion(jit_in.uv,coord2*0.5,		p, n); 
+	    			ao += getAmbientOcclusion(jit_in.uv,coord1*0.75, 	p, n); 
 	    			ao += getAmbientOcclusion(jit_in.uv,coord2, 		p, n); 
 	  	}
   	}
 
-  	//vec3    prevPos = texture(buffer_prev_pos, (textureMatrix0*vec4(histUV, 1., 1.)).xy).xyz;
-  	//float   posDifference = length(prevPos - p);
 	  		ao 	/=	float(aoSamples)*float(iterations)*4.; 
-	  		ao = clamp(ao, 0., 1.);
-	  		float  	blend 		=	clamp(iterCount*100., 0., 0.9);//1. / (iterCount*100. + 1.);
+	  		ao 	= 	clamp(ao, 0., 1.);
+
+	float  	blend 		=	clamp(iterCount*100., 0., 0.9);
 	  		ao 			= 	mix(ao, aoPrev, blend);
 	  		iterCount 	+= 	0.01;
 	  		prevDepth 	= 	p.z;
