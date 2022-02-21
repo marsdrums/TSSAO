@@ -4,9 +4,10 @@
 	<param name="buffer_norm" 		type="int" 		default="1" />
 	<param name="buffer_pos" 		type="int" 		default="2" />
 	<param name="buffer_vel"    	type="int"    	default="3" />
-	<param name="history" 			type="int" 		default="4" />
-	<param name="buffer_rand"   	type="int"  	default="5" />
-	<texture file="random-tex.png" 	type="float16" 	unit="5" rectangle="0" filter="none none" wrap="repeat repeat"/>
+	<param name="buffer_prev_pos"  	type="int"   	default="4" />
+	<param name="history" 			type="int" 		default="5" />
+	<param name="buffer_rand"   	type="int"  	default="6" />
+	<texture file="random-tex.png" 	type="float16" 	unit="6" rectangle="0" filter="none none" wrap="repeat repeat"/>
 	<param name="frame" 			type="float" 	default="0." />
 	<param name="MVP" 				type="mat4" 	state="MODELVIEW_PROJECTION_MATRIX" />
 	<param name="P" 				type="mat4" 	state="CAM_PROJECTION_MATRIX" />
@@ -21,6 +22,7 @@
 		<bind param="buffer_col" 		program="fp" />
 		<bind param="buffer_norm" 		program="fp" />
 		<bind param="buffer_pos"  		program="fp" />
+		<bind param="buffer_prev_pos"  	program="fp" />
 		<bind param="buffer_vel"   		program="fp" />
 		<bind param="history"   		program="fp" />
 		<bind param="buffer_rand"  		program="fp" />
@@ -67,7 +69,7 @@ void main(void) {
 #define PI 3.14159265
 
 uniform mat4 			P, invP, textureMatrix0;
-uniform sampler2DRect 	buffer_col, buffer_norm, buffer_pos, buffer_vel, history;
+uniform sampler2DRect 	buffer_col, buffer_norm, buffer_pos, buffer_prev_pos, buffer_vel, history;
 uniform sampler2D  		buffer_rand;
 uniform float 			frame, radius, intensity, bias;
 
@@ -76,8 +78,7 @@ in jit_PerVertex {
 	smooth vec2 uv;
 } jit_in;
 
-layout (location = 0) out vec4 col;
-layout (location = 1) out vec4 oldOcc;
+layout (location = 0) out vec4 occlusion;
 
 const float random_size		= 1.;  
 
@@ -91,11 +92,18 @@ vec3 hash( uvec3 x )
     
     return vec3(x)*(1.0/float(0xffffffffU));
 }
-vec3 	getPosition(in vec2 uv){
-	return texture(buffer_pos,uv).xyz;
-}
-vec3 	getNormal(in vec2 uv){
-	return normalize(texture(buffer_norm, uv).xyz);
+float halton(int base, int index)
+{
+	float result = 0.;
+	float f = 1.;
+	while (index > 0)
+	{
+		f = f / float(base);
+		result += f * float(index % base);
+		index = index / base; 
+        //index = int(floor(float(index) / float(base)));
+	}
+	return result;
 }
 vec2 	getRandom(in vec2 uv){
 	return normalize(texture(buffer_rand, uv ).xy * 2.0f - 1.0f); 
@@ -103,7 +111,7 @@ vec2 	getRandom(in vec2 uv){
 float 	getAmbientOcclusion(in vec2 tcoord,in vec2 uv, in vec3 p, in vec3 cnorm){
 
 				uv 		= 	(textureMatrix0*vec4(uv, 1., 1.)).xy;
-		vec3 	diff 	= 	getPosition(tcoord + uv) - p; 
+		vec3 	diff 	= 	texture(buffer_pos,tcoord + uv).xyz - p; 
    		vec3 	v 		= 	normalize(diff); 
    		float 	d 		= 	length(diff); 
   		return 				max(0.0,dot(cnorm,v)-bias)*(intensity/(1. + d*d)); //*** i squared the distance
@@ -120,8 +128,8 @@ void main(void) {
   											vec2(+0,-1)
   										);
 
-  	vec3 	p 			= 	getPosition(jit_in.uv); 
-  	vec3 	n 			= 	getNormal(jit_in.uv); 
+  	vec3 	p 			= 	texture(buffer_pos, jit_in.uv).xyz;
+  	vec3 	n 			= 	normalize(texture(buffer_norm, jit_in.uv).xyz);
     vec2 	vel 		= 	texture(buffer_vel, jit_in.uv).rg;
     vec2 	histUV 		= 	jit_in.normUV - vel;
   	vec3 	aoHistory 	= 	texture(history, (textureMatrix0*vec4(histUV, 1., 1.)).xy).xyz; //occ, iterCount, prevDepth
@@ -132,8 +140,9 @@ void main(void) {
   	int iterations = 1;
   	int aoSamples = 4;
 
+
   	//disocclusion?
-    if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1. || abs(1. - (p.z / prevDepth)) > 0.01)
+    if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1. || abs(1. - (p.z / prevDepth)) > 0.1)
     //if(histUV.x < 0. || histUV.x >= 1. || histUV.y < 0. || histUV.y >= 1.)
     {
     		iterCount 	= 0.;
@@ -144,7 +153,7 @@ void main(void) {
   	float 	ao 		= 	0.0; 
 
   	for (int j = 0; j < iterations; j++){
-  		vec2 	rand 	= 	getRandom(vec2(mod(jit_in.normUV.x + float(j)*0.01, 1.), jit_in.normUV.y));  
+  		vec2 	rand 	= 	getRandom(vec2(mod(jit_in.normUV.x + float(j)*0.01 + frame*0.1234556, 1.), jit_in.normUV.y));  
     	float   randRad = 	hash(uvec3(jit_in.uv, frame+j*10.)).x;
     			randRad =  	pow(randRad, 1.5); //seems to increase the details 
   		float 	rad 	= 	radius*randRad/p.z; //ditsance squared to take more samples close to the fragment
@@ -160,16 +169,17 @@ void main(void) {
 	    			ao += getAmbientOcclusion(jit_in.uv,coord2, 		p, n); 
 	  	}
   	}
+
+  	//vec3    prevPos = texture(buffer_prev_pos, (textureMatrix0*vec4(histUV, 1., 1.)).xy).xyz;
+  	//float   posDifference = length(prevPos - p);
 	  		ao 	/=	float(aoSamples)*float(iterations)*4.; 
 	  		ao = clamp(ao, 0., 1.);
 	  		float  	blend 		=	clamp(iterCount*100., 0., 0.9);//1. / (iterCount*100. + 1.);
 	  		ao 			= 	mix(ao, aoPrev, blend);
 	  		iterCount 	+= 	0.01;
 	  		prevDepth 	= 	p.z;
-	  		oldOcc 		= 	vec4(ao, iterCount, prevDepth, 1.);
+	  		occlusion	= 	vec4(ao, iterCount, prevDepth, 1.);
 	   		
-	   		col.rgb = vec3(1. - ao);
-	   		col.a = 1.;
 }
 
 ]]>
