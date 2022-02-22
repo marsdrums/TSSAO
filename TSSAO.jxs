@@ -126,7 +126,7 @@ void main(void) {
   	vec3 	n 			= 	normalize(texture(buffer_norm, jit_in.uv).xyz);
     vec2 	vel 		= 	texture(buffer_vel, jit_in.uv).rg;
     vec2 	histUV 		= 	jit_in.normUV - vel;
-  	vec3 	aoHistory 	= 	texture(history, (textureMatrix0*vec4(histUV, 1., 1.)).xy).xyz; //occ, iterCount, prevDepth
+  	vec3 	aoHistory 	= 	texture(history, (textureMatrix0*vec4(histUV.x, 1. - histUV.y, 1., 1.)).xy).xyz; //occ, iterCount, prevDepth
   	float  	aoPrev 		= 	aoHistory.x;
   	float   iterCount 	= 	aoHistory.y;
   	float   prevDepth 	= 	aoHistory.z;
