@@ -186,7 +186,7 @@ void main(void) {
 	  		occlusion	= 	vec4(ao, iterCount, prevDepth, 1.);
 
 	  		bounce 		= 	clamp(bounce, vec3(0.), vec3(1.));
-	  		bounce 		= 	mix(bounce, colHistory, blend*1.03);
+	  		bounce 		= 	mix(bounce, colHistory, blend*1.03); //the light bounces work better with a greater feedback factor
 
 	  		GI 	=	vec4(bounce, 1.);
 	   		
