@@ -116,7 +116,7 @@ void 	getAOandBounce(in vec2 tcoord,in vec2 uv, in vec3 p, in vec3 cnorm, inout 
    		float 	att 	= 	1./(1. + d*d); //*** i squared the distance
    		float 	facing 	= 	max(0.0,dot(cnorm,v)-bias);
   				oc 		+= 	facing*intensity*att; 
-  				bounce 	+= 	(att*0.3 + 0.7)*(facing > 0. ? col : col*0.3);//*** super empirical way to minimize the light contribution coming from sources not in front of the fragment we're shading
+  				bounce 	+= 	facing > 0. ? col : col*0.3;//*** super empirical way to minimize the light contribution coming from sources not in front of the fragment we're shading
 }
 
 /************************************ Temporal-supersampled SSAO*********************************************************
@@ -185,7 +185,7 @@ void main(void) {
 	  		prevDepth 	= 	p.z;
 	  		occlusion	= 	vec4(ao, iterCount, prevDepth, 1.);
 
-	  		bounce 		= 	clamp(bounce, vec3(0.), vec3(1.));
+	  		bounce 		= 	clamp(bounce, vec3(0.), vec3(10.));
 	  		bounce 		= 	mix(bounce, colHistory, blend*1.03); //the light bounces seem to work better with a greater feedback factor
 
 	  		GI 	=	vec4(bounce, 1.);
