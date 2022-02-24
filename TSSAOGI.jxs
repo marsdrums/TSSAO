@@ -18,6 +18,7 @@
 	<param name="intensity"			type="float"   	default="2.4" />
 	<param name="bias"  			type="float"  	default="0.001" />
 	<param name="frame"   			type="float"  	default="0." />
+	<param name="farClip"  			type="float"    state="FAR_CLIP" />
 	<language name="glsl" version="1.5">
 		<bind param="buffer_col" 		program="fp" />
 		<bind param="buffer_norm" 		program="fp" />
@@ -37,6 +38,7 @@
 		<bind param="intensity"  		program="fp" />
 		<bind param="bias"  			program="fp" />
 		<bind param="frame"   			program="fp" />
+		<bind param="farClip"     		program="fp" />
 <program name="vp" type="vertex"  >
 <![CDATA[
 #version 330 core
@@ -71,7 +73,14 @@ void main(void) {
 uniform mat4 			P, invP, textureMatrix0;
 uniform sampler2DRect 	buffer_col, buffer_norm, buffer_pos, buffer_vel, history, history_col;
 uniform sampler2D  		buffer_rand;
-uniform float 			frame, radius, intensity, bias;
+uniform float 			frame, radius, intensity, bias, farClip;
+
+	const float rayStep = 0.01;
+	const float minRayStep = 0.1;
+	const int maxSteps =  300;
+	const float searchDist = 5.;
+	const int numBinarySearchSteps = 5;
+	const float reflectionsSpecularFalloffExponent = 3.0;
 
 in jit_PerVertex {
 	smooth vec2 normUV;
@@ -80,6 +89,7 @@ in jit_PerVertex {
 
 layout (location = 0) out vec4 occlusion;
 layout (location = 1) out vec4 GI;
+layout (location = 2) out vec4 ref;
 
 vec3 hash( uvec3 x )
 {
@@ -108,8 +118,8 @@ vec2 	getRandom(in vec2 uv){
 void 	getAOandBounce(in vec2 tcoord,in vec2 uv, in vec3 p, in vec3 cnorm, inout float oc, inout vec3 bounce){
 
 				uv 		= 	(textureMatrix0*vec4(uv, 1., 1.)).xy;
-		vec3 	diff 	= 	texture(buffer_pos,tcoord + uv).xyz - p; 
-		vec3 	col 	= 	texture(buffer_col,tcoord + uv).xyz; 
+		vec3 	diff 	= 	texture(buffer_pos, tcoord + uv).xyz - p; 
+		vec3 	col 	= 	texture(buffer_col, tcoord + uv).xyz; 
 		//vec3 	nor 	= 	texture(buffer_norm, tcoord + uv).xyz;
    		vec3 	v 		= 	normalize(diff); 
    		float 	d 		= 	length(diff); 
@@ -119,11 +129,69 @@ void 	getAOandBounce(in vec2 tcoord,in vec2 uv, in vec3 p, in vec3 cnorm, inout 
   				bounce 	+= 	facing > 0. ? col : col*0.3;//*** super empirical way to minimize the light contribution coming from sources not in front of the fragment we're shading
 }
 
+vec3 binarySearch(inout vec3 r, inout vec3 hitCoord, inout float dDepth){
+	float depth;
+	vec4 projectedCoord;
+	for(int i = 0; i < numBinarySearchSteps; i++){
+		projectedCoord = P * vec4(hitCoord, 1.);
+		projectedCoord.xy /= projectedCoord.w;
+		projectedCoord.xy = projectedCoord.xy * 0.5 + vec2(0.5);
+
+		depth = texture(buffer_pos, (textureMatrix0*vec4(projectedCoord.xy, 1., 1.)).xy ).z; //metti rect coordinates
+		dDepth = hitCoord.z - depth;
+		r *= 0.5;
+		hitCoord += dDepth > 0. ? r : -r;
+
+	}
+	projectedCoord = P * vec4(hitCoord, 1.);
+	projectedCoord.xy /= projectedCoord.w;
+	projectedCoord.xy = projectedCoord.xy * 0.5 + vec2(0.5);
+
+	return vec3(projectedCoord.xy, depth);
+}
+
+vec4  	getReflections(in vec3 r, inout vec3 hitCoord, inout float dDepth){
+
+		r *= rayStep;
+	float depth;
+	int steps;
+	vec4 projectedCoord;
+	for (int i = 0; i < maxSteps; i++){
+
+		hitCoord += r;
+		projectedCoord = P * vec4(hitCoord, 1.);
+		projectedCoord.xy /= projectedCoord.w;
+		projectedCoord.xy = projectedCoord.xy * 0.5 + vec2(0.5);
+
+		depth = texture(buffer_pos, (textureMatrix0*vec4(projectedCoord.xy, 1., 1.)).xy ).z;
+
+		if(depth > 1000.){
+			continue;
+		}
+
+		dDepth = hitCoord.z - depth;
+
+		if((r.z - dDepth) < 1.2){
+			if(dDepth <= 0.){
+				vec4 result;
+				result = vec4(binarySearch(r, hitCoord, dDepth), 1.); 
+				return result;
+			}
+		}
+
+		steps++;
+	}
+
+	return vec4(projectedCoord.xy, depth, 0.0);
+}
+
 /************************************ Temporal-supersampled SSAO*********************************************************
 based on: https://publik.tuwien.ac.at/files/PubDat_191582.pdf
 and: https://www.gamedev.net/tutorials/_/technical/graphics-programming-and-theory/a-simple-and-practical-approach-to-ssao-r2753/
 ******************************************************************************************************************************/
 void main(void) {
+
+
 
   	const 	vec2 	vec[4] 	= 	vec2[] (	vec2(+1,+0),
   											vec2(-1,+0), 
@@ -180,15 +248,34 @@ void main(void) {
 	  		bounce /= nSamps;
 
 	float  	blend 		=	clamp(iterCount*100., 0., 0.9);
+
+	//blend = 0.;
 	  		ao 			= 	mix(ao, aoPrev, blend);
 	  		iterCount 	+= 	0.01;
 	  		prevDepth 	= 	p.z;
 	  		occlusion	= 	vec4(ao, iterCount, prevDepth, 1.);
 
-	  		bounce 		= 	clamp(bounce, vec3(0.), vec3(10.));
-	  		bounce 		= 	mix(bounce, colHistory, blend*1.03); //the light bounces seem to work better with a greater feedback factor
+	  		bounce 		= 	clamp(bounce, vec3(0.), vec3(1.));
+	  		bounce 		= 	mix(bounce, colHistory, blend*1.04); //the light bounces seem to work better with a greater feedback factor
+
 
 	  		GI 	=	vec4(bounce, 1.);
+// https://github.com/ImanolFotia/Epsilon-Engine/blob/master/bin/Release/shaders/SSR.frag
+
+	vec3 v = normalize(p);
+	vec3 r = reflect(normalize(v), normalize(n));
+	vec3 hitPos = p;
+
+
+	float 	dDepth;
+	vec4 	coords 			= getReflections(r * max(minRayStep, -p.z), hitPos, dDepth);
+	vec2  	dCoords 		= smoothstep(0.2, 0.6, abs(vec2(0.5) - coords.xy));
+	float 	sceenEdgeFactor = clamp(1. - (dCoords.x + dCoords.y), 0., 1.);
+	//float multiplier = pow()
+	vec3 	SSR 			= texture(buffer_col, (textureMatrix0*vec4(coords.xy, 1., 1.)).xy ).rgb * clamp(sceenEdgeFactor * -r.z, 0., 0.9);
+	float fresnel = pow(clamp(1. - dot(v, -n), 0., 1.), 5.) * 0.85 + 0.15;
+			ref 			= vec4(SSR, fresnel);
+
 	   		
 }
 
