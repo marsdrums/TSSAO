@@ -1754,8 +1754,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 85.5, 713.999999821186066, 79.0, 22.0 ],
-					"text" : "vexpr $f1 * 8."
+					"patching_rect" : [ 85.5, 713.999999821186066, 86.0, 22.0 ],
+					"text" : "vexpr $f1 * 10."
 				}
 
 			}
@@ -1778,8 +1778,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 85.5, 745.999999821186066, 93.0, 22.0 ],
-					"text" : "position $1 3 $2"
+					"patching_rect" : [ 85.5, 745.999999821186066, 103.0, 22.0 ],
+					"text" : "position $1 0.5 $2"
 				}
 
 			}
