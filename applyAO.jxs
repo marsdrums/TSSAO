@@ -1,0 +1,56 @@
+<jittershader name="default">
+	<description>Default Slab </description>
+	<param name="colTex" type="int" default="0" />
+	<param name="aoTex" type="int" default="1" />
+	<param name="MVP" type="mat4" state="MODELVIEW_PROJECTION_MATRIX" />
+	<param name="textureMatrix0" type="mat4" state="TEXTURE0_MATRIX" />
+	<param name="pos" type="vec3" state="POSITION" />
+	<param name="uv" type="vec2" state="TEXCOORD" />
+	<param name="ao_only" type="bool" default="false" />
+	<language name="glsl" version="1.5">
+		<bind param="colTex" program="fp" />
+		<bind param="aoTex" program="fp" />
+		<bind param="MVP" program="vp" />
+		<bind param="textureMatrix0" program="vp" />
+		<bind param="pos" program="vp" />
+		<bind param="uv" program="vp" />
+		<bind param="ao_only" program="fp" />
+		<program name="vp" type="vertex"  >
+		<![CDATA[
+			#version 330 core
+			
+			in vec3 pos;
+			in vec2 uv;
+			out jit_PerVertex {
+				vec2 uv;
+			} jit_out;
+			uniform mat4 MVP;
+			uniform mat4 textureMatrix0;
+			
+			void main(void) {
+				gl_Position = MVP*vec4(pos, 1.);
+				jit_out.uv = vec2(textureMatrix0*vec4(uv, 0., 1.));
+			}
+		]]>
+		</program>
+		
+		<program name="fp" type="fragment"  >
+		<![CDATA[
+			#version 330 core
+			
+			in jit_PerVertex {
+				vec2 uv;
+			} jit_in;
+			layout (location = 0) out vec4 col;
+			
+			uniform sampler2DRect colTex, aoTex;
+			uniform bool ao_only;
+
+			void main(void) {
+				col = texture(colTex, jit_in.uv);
+				col.rgb = ao_only ? vec3(1. - texture(aoTex, jit_in.uv).r) : col.rgb * (1. - texture(aoTex, jit_in.uv).r);
+			}
+		]]>
+		</program>
+	</language>
+</jittershader>

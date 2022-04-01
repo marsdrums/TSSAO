@@ -1,0 +1,26 @@
+<jitterpass>
+	<pass name="tssao">
+		<subpass file="getViewPos.jxs">
+			<input source="NORMALS" />
+		</subpass>
+		<bind name="radius" param="radius" default="2.4" />
+		<bind name="intensity" param="intensity" default="2.4" />
+		<bind name="seed" param="seed" default="0." />
+		<bind name="accumulate" param="accumulate" default="0.92" />
+		<subpass file="TSSAOforPass.jxs">
+			<input source="COLOR" />
+			<input source="NORMALS" />
+			<input source="PREVIOUS" />
+			<input source="VELOCITY" />
+			<input source="SUBPASS2" />
+		</subpass>	
+		<subpass file="crossBiHoriz.jxs">
+			<input source="PREVIOUS" />
+		</subpass>
+		<bind name="ao_only" param="ao_only" default="0" />
+		<subpass file="applyAO.jxs">
+			<input source="COLOR" />
+			<input source="PREVIOUS" />
+		</subpass>	
+	</pass>
+</jitterpass>	

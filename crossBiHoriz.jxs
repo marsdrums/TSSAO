@@ -57,41 +57,63 @@ based on: https://www.shadertoy.com/view/4dfGDH
 and: http://people.csail.mit.edu/sparis/bf_course/course_notes.pdf
 ******************************************************************************************/
 
-void main()
-{
-	vec4 AOtexture = texture(tex0, jit_in.uv);
-	float c = AOtexture.r;
+vec4	getSmooth(vec4 AOtexture){
 
-	int MSIZE = AOtexture.y > 0.1 ? 1 : 5; //apply blurring only to new disoccluded fragments
-	int kSize = (MSIZE-1)/2;
-	float kernel[5];
-	float final_ao = 0.;
-	
-	//create the 1-D kernel
-	float Z = 0.0;
-	for (int j = 0; j <= kSize; ++j)
-	{
-		kernel[kSize+j] = kernel[kSize-j] = normpdf(float(j), SIGMA);
-	}
-	
-	vec4 cc;
-	float factor;
-	float bZ = 1.0/normpdf(0.0, BSIGMA);
+	const 	float 	kernel[3] = float[3]	(	0.031225216, 0.033322271, 0.035206333);
+
+	float 	Z = 0.0;
+	vec4 	cc;
+	float 	factor;
+	float 	bZ = 1.0/normpdf(0.0, BSIGMA);
+	float 	final_ao = 0.;
 	//read out the texels
-	for (int i=-kSize; i <= kSize; ++i)
+	for (int i=-1; i <= 1; ++i)
 	{
-		for (int j=-kSize; j <= kSize; ++j)
+		for (int j=-1; j <= 1; ++j)
 		{
-			vec2 uv = jit_in.uv+vec2(float(i),float(j));
-			cc = texture(tex0, uv); 
-			factor = normpdf(cc.z-AOtexture.z, BSIGMA)*bZ*kernel[kSize+j]*kernel[kSize+i];
-			Z += factor;
-			final_ao += factor*cc.x;
+			vec2 	uv 		= jit_in.uv+vec2(float(i),float(j))*0.2;
+					cc 		= texture(tex0, uv); 
+					factor 	= normpdf(cc.z-AOtexture.z, BSIGMA)*bZ*kernel[1+j]*kernel[1+i];
+					Z 		+= factor;
+					final_ao += factor*cc.x;
 		}
 	}
 			
-	outColor = vec4(final_ao/Z, AOtexture.gba);
-	
+	return vec4(final_ao/Z, AOtexture.gba);
+}
+
+vec4	getBlur(vec4 AOtexture){
+
+	const 	float 	kernel[15] = float[15]	(	0.031225216, 0.033322271, 0.035206333, 
+												0.036826804, 0.038138565, 0.039104044, 
+												0.039695028, 0.039894000, 0.039695028, 
+												0.039104044, 0.038138565, 0.036826804, 
+												0.035206333, 0.033322271, 0.031225216);
+	float 	Z = 0.0;
+	vec4 	cc;
+	float 	factor;
+	float 	bZ = 1.0/normpdf(0.0, BSIGMA);
+	float 	final_ao = 0.;
+	//read out the texels
+	for (int i=-7; i <= 7; ++i)
+	{
+		for (int j=-7; j <= 7; ++j)
+		{
+			vec2 	uv 		= jit_in.uv+vec2(float(i),float(j));
+					cc 		= texture(tex0, uv); 
+					factor 	= normpdf(cc.z-AOtexture.z, BSIGMA)*bZ*kernel[7+j]*kernel[7+i];
+					Z 		+= factor;
+					final_ao += factor*cc.x;
+		}
+	}
+			
+	return vec4(final_ao/Z, AOtexture.gba);
+}
+
+void main()
+{
+	vec4 	AOtexture = texture(tex0, jit_in.uv);
+			outColor = AOtexture.y > 0.1 ? AOtexture : getBlur(AOtexture); //apply blurring only to new disoccluded fragments
 }
 ]]>
 </program>
